@@ -328,7 +328,7 @@ class Viewport(DXFGraphic):
                 if len(tags):
                     tags = self.load_frozen_layer_handles(tags)
                 if len(tags):
-                    processor.log_unprocessed_tags(tags, subclass=acdb_viewport.name)
+                    processor.log_unprocessed_tags(tags, subclass=acdb_viewport.name) # type: ignore
         return dxf
 
     def post_load_hook(self, doc: Drawing):
@@ -633,8 +633,13 @@ class Viewport(DXFGraphic):
         # TODO: Is there a flag or attribute that determines which of these points is
         #  the center point?
         center_point = Vec3(self.dxf.view_center_point)
-        if center_point.is_null:
-            center_point = Vec3(self.dxf.view_target_point)
+
+        if self.dxf.view_twist_angle:
+            angle_radians = math.radians(self.dxf.view_twist_angle)
+            center_point = Matrix44.z_rotate(-angle_radians).transform(center_point)
+
+        center_point += Vec3(self.dxf.view_target_point)
+
         return center_point
 
     def get_transformation_matrix(self) -> Matrix44:
@@ -645,9 +650,16 @@ class Viewport(DXFGraphic):
         msp_center_point: Vec3 = self.get_view_center_point()
         offset: Vec3 = self.dxf.center - (msp_center_point * scale)
         m = Matrix44.scale(scale)
+        m @= Matrix44.translate(offset.x, offset.y, 0)
         if rotation_angle:
-            m @= Matrix44.z_rotate(math.radians(rotation_angle))
-        return m @ Matrix44.translate(offset.x, offset.y, 0)
+            rotation_matrix = (
+                Matrix44.translate(*-self.dxf.center)
+                @ Matrix44.z_rotate(math.radians(rotation_angle))
+                @ Matrix44.translate(*self.dxf.center)
+            )
+            m @= rotation_matrix
+
+        return m
 
     def get_aspect_ratio(self) -> float:
         """Returns the aspect ratio of the viewport, return 0.0 if width or
@@ -673,7 +685,7 @@ class Viewport(DXFGraphic):
         h2 = msp_height * 0.5
         if rotation_angle:
             frame = Vec2.list(((-w2, -h2), (w2, -h2), (w2, h2), (-w2, h2)))
-            angle = math.radians(rotation_angle)
+            angle = math.radians(360 - rotation_angle)
             bbox = BoundingBox2d(v.rotate(angle) + msp_center_point for v in frame)
             return bbox.extmin.x, bbox.extmin.y, bbox.extmax.x, bbox.extmax.y
         else:
