@@ -27,7 +27,7 @@ from ezdxf.lldxf.const import (
     LINEWEIGHT_BYLAYER,
     LINEWEIGHT_DEFAULT,
 )
-from ezdxf.audit import AuditError
+
 from ezdxf.entities.dxfentity import base_class, SubclassProcessor, DXFEntity
 from .factory import register_entity
 
@@ -137,7 +137,8 @@ class Layer(DXFEntity):
         dxf = super().load_dxf_attribs(processor)
         if processor:
             processor.simple_dxfattribs_loader(
-                dxf, acdb_layer_table_record_group_codes  # type: ignore
+                dxf,
+                acdb_layer_table_record_group_codes,  # type: ignore
             )
         return dxf
 
@@ -368,13 +369,13 @@ class Layer(DXFEntity):
                 # todo: if LAYER_FILTER implemented, add support for
                 #  renaming layers
                 logger.debug(
-                    f'renaming layer "{old_name}" - document contains ' f"LAYER_FILTER"
+                    f'renaming layer "{old_name}" - document contains LAYER_FILTER'
                 )
             elif entity_type == "LAYER_INDEX":
                 # todo: if LAYER_INDEX implemented, add support for
                 #  renaming layers
                 logger.debug(
-                    f'renaming layer "{old_name}" - document contains ' f"LAYER_INDEX"
+                    f'renaming layer "{old_name}" - document contains LAYER_INDEX'
                 )
 
     def get_vp_overrides(self) -> LayerOverrides:
@@ -407,11 +408,14 @@ class Layer(DXFEntity):
         clone.discard_extension_dict()
 
     def audit(self, auditor: Auditor) -> None:
+        from ezdxf.audit import AuditError
+
         super().audit(auditor)
         linetype = self.dxf.linetype
         if auditor.doc.linetypes.has_entry(linetype):
             return
         self.dxf.linetype = "Continuous"
+
         auditor.fixed_error(
             code=AuditError.UNDEFINED_LINETYPE,
             message=f"Replaced undefined linetype {linetype} in layer '{self.dxf.name}' by CONTINUOUS",
